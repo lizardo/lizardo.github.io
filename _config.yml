@@ -1,3 +1,5 @@
 title: 0x1000 Projects
 description: Notes from my current and past projects.
 theme: minima
+header_pages:
+  - index.md
