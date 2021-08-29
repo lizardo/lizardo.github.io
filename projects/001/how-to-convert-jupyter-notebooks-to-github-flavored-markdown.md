@@ -2,7 +2,11 @@
 title: How to convert Jupyter notebooks to GitHub flavored Markdown
 ---
 
-> _**NOTE**_: this text has been automatically extracted from [this Colab/Jupyter notebook](https://colab.research.google.com/drive/1qJKbkTiAqWu9fCsLEdGJavFDgsGLmN82). For the best experience, I recommend reading it there!
+***
+
+**NOTE: This text has been automatically extracted from a [Colab/Jupyter notebook](https://colab.research.google.com/drive/1qJKbkTiAqWu9fCsLEdGJavFDgsGLmN82#revisionId=0BzK9MbvobeYaaW1SZGJ1OTh1bmt1S3dEYTU2eEEwQmR2Nm5FPQ){:target="_blank"}. If you have any questions, feel free to leave a comment there (requires sign in with a Google account).**
+
+***
 
 > **_NOTE_**: If you are on Colab, you can download the code below as a single script using **File ▶ Download ▶ Download .py**. The script can then be run with `python3 ipynbtomarkdown.py <notebook.ipynb>`
 

@@ -2,7 +2,11 @@
 title: How to configure a Colab local runtime using Docker
 ---
 
-> _**NOTE**_: this text has been automatically extracted from [this Colab/Jupyter notebook](https://colab.research.google.com/drive/1sRkj7_VbLp8oguD8OmD6-ZXEH2LBJwe1). For the best experience, I recommend reading it there!
+***
+
+**NOTE: This text has been automatically extracted from a [Colab/Jupyter notebook](https://colab.research.google.com/drive/1sRkj7_VbLp8oguD8OmD6-ZXEH2LBJwe1#revisionId=0BzK9MbvobeYaZk52WnAzNXczSEdEZ3hua3BETXIxUzNSWGFzPQ){:target="_blank"}. If you have any questions, feel free to leave a comment there (requires sign in with a Google account).**
+
+***
 
 In this notebook, I describe the steps I use for running Colab notebooks with a [local runtime](https://research.google.com/colaboratory/local-runtimes.html). I diverge from the official instructions mainly because I prefer to run the Jupyter software inside a Docker container, for safety reasons.
 
