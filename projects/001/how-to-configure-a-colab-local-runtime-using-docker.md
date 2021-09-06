@@ -4,7 +4,7 @@ title: How to configure a Colab local runtime using Docker
 
 ***
 
-**NOTE: This text has been automatically extracted from a [Colab/Jupyter notebook](https://colab.research.google.com/drive/1sRkj7_VbLp8oguD8OmD6-ZXEH2LBJwe1#revisionId=0BzK9MbvobeYaZk52WnAzNXczSEdEZ3hua3BETXIxUzNSWGFzPQ){:target="_blank"}. If you have any questions, feel free to leave a comment there (requires sign in with a Google account).**
+**NOTE: This text has been automatically extracted from a [Colab/Jupyter notebook](https://colab.research.google.com/drive/1sRkj7_VbLp8oguD8OmD6-ZXEH2LBJwe1#revisionId=0BzK9MbvobeYaR2NGKzlmYjVBUjZXZ2piQ2FadVQ0UmRPMzZzPQ){:target="_blank"}. If you have any questions, feel free to leave a comment there (requires sign in with a Google account).**
 
 ***
 
@@ -30,7 +30,9 @@ Additionally, I assume you have a basic knowledge on how to use the command line
 We will need the following modules:
 
 ```python
-from subprocess import check_call, CalledProcessError, DEVNULL
+import os
+import secrets
+from subprocess import run, check_call, CalledProcessError, DEVNULL
 ```
 
 <a name="docker-name"></a>
@@ -39,13 +41,89 @@ We will also need a name. It will be used in several Docker container components
 - name
 - hostname
 - volume (with `-data` appended)
+- image (with `-img` appended), if using encryption
 
 ```python
 name = 'local-jupyter-runtime'
 ```
 
+<br>
+
+---
+
+**Creating an encrypted "data" directory**
+
+This is an optional step, but recommended if you intend to manipulate sensitive files. If you don't have whole disk encryption, the directory where Docker saves volumes (`/var/lib/docker`) will NOT be encrypted. To remediate this, we will use [gocryptfs](https://github.com/rfjakob/gocryptfs) to configure an encrypted **data** directory.
+
+First, we define a function which:
+- creates a file containing the encryption password (16 random characters)
+- builds a Docker image containing gocryptfs
+- adds extra parameters to `docker run`
+
+```python
+extra_docker_args = []
+docker_image = 'jupyter/base-notebook'
+
+dockerfile_encryption = """
+FROM jupyter/base-notebook
+
+USER root
+
+# It is faster to download the fuse package manually than to install it through
+# apt. Additionally, gocryptfs is outdated on Ubuntu Focal (base image for
+# jupyter/base-notebook).
+
+ENV pkg_mirror=http://mirrors.kernel.org/ubuntu
+ENV fuse_deb_url=${pkg_mirror}/pool/main/f/fuse/fuse_2.9.9-3_amd64.deb
+ENV gh_release=https://github.com/rfjakob/gocryptfs/releases/download/v2.1
+ENV gocryptfs_tgz_url=${gh_release}/gocryptfs_v2.1_linux-static_amd64.tar.gz
+
+# FIXME: Check PGP signatures for fuse & gocryptfs
+RUN wget -O- ${fuse_deb_url} | dpkg --fsys-tarfile - | \
+    tar -C /usr/local/bin -xf- --strip-components=2 ./bin/fusermount
+RUN chown root /usr/local/bin/fusermount && \
+    chmod u+s /usr/local/bin/fusermount
+RUN wget -O- ${gocryptfs_tgz_url} | tar -C /usr/local/bin -xzf- gocryptfs
+
+USER jovyan
+"""
+
+def setup_encryption(keyfile):
+    global extra_docker_args
+    global docker_image
+
+    # Source: https://stackoverflow.com/a/49021109
+    mount_arg = f'type=bind,src={os.path.abspath(keyfile)},' + \
+                f'dst=/home/jovyan/{keyfile},readonly'
+    extra_docker_args = ['--device', '/dev/fuse',
+                         '--cap-add', 'SYS_ADMIN',
+                         '--security-opt', 'apparmor:unconfined',
+                         '--mount', mount_arg]
+    docker_image = f'{name}-img'
+
+    if not os.path.exists(keyfile):
+        open(keyfile, 'w').write(secrets.token_urlsafe(16))
+        print(f'Created encryption key file: {keyfile}')
+
+    run(['docker', 'build', '-t', docker_image, '-'], check=True,
+        input=dockerfile_encryption, universal_newlines=True)
+```
+
+Next, we call the function to perform the setup:
+
+```python
+setup_encryption('cipher.key') # Add "#" before this line to disable encryption
+```
+
+If you do not want encryption, comment out the line above (i.e. put `#` at the beginning of the line before saving this notebook as a script).
+
+<br>
+
+---
+
 This POSIX shell script snippet will run inside the container, and will:
 
+- Mount an encrypted directory under **data** (if previously enabled)
 - Make adjustments that allow notebooks to install local software, including Python packages
 - Configure the `jupyter_http_over_ws` Jupyter extension
 - Start the notebook with required parameters
@@ -53,7 +131,30 @@ This POSIX shell script snippet will run inside the container, and will:
 The last two points come from the [official instructions](https://research.google.com/colaboratory/local-runtimes.html) for using a local runtime with Colab.
 
 ```python
+# NOTE: The "cipher.key" file will remain readable by any process running
+# inside the container. This is not a problem, as files protected by encryption
+# are also accessible anyway.
 start_notebook = """
+if [ -f cipher.key ]; then
+    mkdir -p data
+    log_file=/tmp/gocryptfs.log
+    error_file='data/!!!ERROR_NOT_ENCRYPTED!!!.txt'
+    rm -f "${error_file}" ${log_file}
+    gocryptfs_cmd='timeout -v 10 gocryptfs -nosyslog -passfile cipher.key'
+    if [ ! -d cipher ]; then
+        mkdir cipher
+        ${gocryptfs_cmd} -init cipher > ${log_file} 2>&1
+    fi
+    ${gocryptfs_cmd} cipher data >> ${log_file} 2>&1
+    if [ $? -eq 0 ]; then
+        if [ ! -f data/README.gocryptfs.txt ]; then
+            cat ${log_file} > data/README.gocryptfs.txt
+        fi
+    else
+        cat ${log_file} > "${error_file}"
+    fi
+fi
+
 mkdir -p ${HOME}/.local/bin && export PATH=${PATH}:${HOME}/.local/bin &&
 mkdir -p `python -m site --user-site` &&
 pip install jupyter_http_over_ws &&
@@ -65,7 +166,7 @@ start-notebook.sh \
 """
 ```
 
-Try to start an existing container. If it fails, build a new one:
+Try to start an existing (stopped) container. If it fails, run a new one:
 
 ```python
 try:
@@ -73,8 +174,9 @@ try:
 except CalledProcessError:
     check_call(['docker', 'run', '--detach', '--publish', '8888:8888',
                '--name', name, '--hostname', name,
-               '--mount', f'type=volume,src={name}-data,dst=/home/jovyan',
-               'jupyter/base-notebook', 'sh', '-c', start_notebook],
+               '--mount', f'type=volume,src={name}-data,dst=/home/jovyan'] +
+               extra_docker_args +
+               [docker_image, 'sh', '-c', start_notebook],
                stdout=DEVNULL)
 ```
 
@@ -151,6 +253,11 @@ echo ${HOSTNAME}
 
 If it prints the same value shown on the ["name" variable shown earlier](#docker-name), we are all good!
 
+## Appendix: known issues
+
+- Colab "Files" view (the folder icon at the left side bar) will show files inside the container. You can delete and upload files, but if you try to open a file (double-click it), Colab will show a "403 Forbidden" error. This is apparently a [bug from Jupyter](https://github.com/jupyterlab/jupyterlab/issues/7539). The file is accessible from code cells though.
+- Encryption support probably only works on Linux hosts.
+
 ## Appendix: further help installing Docker on Linux
 
 The official Docker installation documentation for Linux may seem confusing. Therefore, you can follow this guide to navigate through the documentation:
@@ -171,12 +278,14 @@ name=local-jupyter-runtime
 docker stop ${name}
 docker rm ${name}
 docker volume rm ${name}-data
+docker image rm ${name}-img
 ```
 
 This POSIX shell script will:
 - Stop the container (if running)
 - Remove the container
 - Remove the persistent volume
+- Remove the image
 
 Note that, after this last step, **Any data saved inside the local runtime will be deleted forever**.
 
