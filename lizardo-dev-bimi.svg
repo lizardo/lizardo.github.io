@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" version="1.2" baseProfile="tiny-ps" viewBox="0 0 512 512">
+  <title>lizardo.dev — 0x1000 Projects</title>
+  <desc>A geometric 0x monogram in mint and white on a dark navy square.</desc>
+  <rect width="512" height="512" rx="112" fill="#081A2C"/>
+  <path fill="#5EEAD4" fill-rule="evenodd" d="M128 128h112l56 56v144l-56 56H128l-56-56V184l56-56zm24 64-24 24v80l24 24h64l24-24v-80l-24-24h-64z"/>
+  <path fill="#F8FAFC" d="M302 174l42 42 42-42 40 40-42 42 42 42-40 40-42-42-42 42-40-40 42-42-42-42 40-40z"/>
+</svg>
